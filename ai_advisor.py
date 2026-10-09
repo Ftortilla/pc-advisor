@@ -185,14 +185,15 @@ def refresh_state() -> dict:
     return {"lock": threading.Lock(), "last_fail": 0.0, "last_error": ""}
 
 
-def refresh_laptops_if_stale():
-    """資料太舊就自動更新。成功或不需要更新回傳 None，失敗回傳錯誤訊息。"""
+def refresh_laptops_if_stale(force: bool = False):
+    """資料太舊就自動更新。force=True 時不管新舊都立刻重抓（網址加 refresh=1）。
+    成功或不需要更新回傳 None，失敗回傳錯誤訊息。"""
     scraped_at = csv_scraped_at(LAPTOP_CSV) if os.path.exists(LAPTOP_CSV) else None
-    if scraped_at and datetime.now(TAIPEI) - scraped_at < REFRESH_AFTER:
+    if not force and scraped_at and datetime.now(TAIPEI) - scraped_at < REFRESH_AFTER:
         return None
 
     state = refresh_state()
-    if time.time() - state["last_fail"] < RETRY_COOLDOWN:
+    if not force and time.time() - state["last_fail"] < RETRY_COOLDOWN:
         return state["last_error"]
 
     if not state["lock"].acquire(blocking=False):
@@ -611,7 +612,15 @@ else:
 
     # ---------------- 筆電（讀原價屋 CSV） ----------------
     else:
-        refresh_error = refresh_laptops_if_stale()
+        # 網址加上 refresh=1 會強制重抓一次（測試用）。用 session_state 記住，避免同一個分頁重複觸發
+        force_refresh = st.query_params.get("refresh") == "1" and not st.session_state.get("forced_done")
+        refresh_error = refresh_laptops_if_stale(force=force_refresh)
+        if force_refresh:
+            st.session_state["forced_done"] = True
+            if refresh_error:
+                st.error(f"強制更新失敗：{refresh_error}")
+            else:
+                st.success("強制更新成功，已抓到原價屋最新價格。")
 
         if not os.path.exists(LAPTOP_CSV):
             st.error(
