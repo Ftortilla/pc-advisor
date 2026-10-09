@@ -1,0 +1,20 @@
+# 不准上傳到 GitHub 的檔案
+
+# 🔒 API 金鑰等機密（之後加 AI 會用到），絕對不能公開
+.streamlit/secrets.toml
+.env
+
+# Python 自動產生的暫存檔
+__pycache__/
+*.pyc
+
+# 虛擬環境
+.venv/
+venv/
+
+# 舊版備份，不用上傳
+ai_advisor_old.py
+
+# 系統雜檔
+.DS_Store
+Thumbs.db
