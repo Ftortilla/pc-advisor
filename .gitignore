@@ -12,6 +12,15 @@ __pycache__/
 .venv/
 venv/
 
+# 開發用的探勘檔案（explore_parts.py 產生的），不用上傳
+data/coolpc_raw.html
+data/coolpc_overview.txt
+data/coolpc_e19.js
+data/coolpc_img_probe.txt
+
+# 商品圖片和規格的快取（網站會自己重新產生）
+data/coolpc_details.json
+
 # 舊版備份，不用上傳
 ai_advisor_old.py
 

@@ -72,6 +72,35 @@ def get_model_code(text: str) -> str:
     return codes[-1].strip() if codes else ""
 
 
+def read_id_arrays(soup: BeautifulSoup) -> dict:
+    """讀出網頁程式碼裡每一列的「商品隱藏編號」陣列，例如 {14: ["0", "0", "4527.5", ...]}。
+
+    隱藏編號是原價屋內部的商品代號，拿它去問 eva-img.php 才拿得到圖片和詳細規格。
+    選單第 k 個選項（value=k）對應陣列第 k 個編號。
+    """
+    script_text = "\n".join(s.get_text() for s in soup.find_all("script"))
+    arrays = {}
+    for m in re.finditer(r"\bg(\d+)=\[([^\]]*)\]", script_text):
+        arrays[int(m.group(1))] = [x.strip() for x in m.group(2).split(",")]
+    return arrays
+
+
+def iter_options_full(select, ids: list):
+    """跟 iter_options 一樣，但多回傳商品隱藏編號：(商品文字, 價格, 分組名稱, 隱藏編號)。"""
+    for option in select.find_all("option"):
+        if option.has_attr("disabled"):
+            continue
+        text = own_text(option)
+        price = get_price(text)
+        if price is None:
+            continue
+        value = option.get("value", "")
+        gid = ""
+        if value.isdigit() and int(value) < len(ids) and ids[int(value)] not in ("", "0"):
+            gid = ids[int(value)]
+        yield text, price, get_group_label(option), gid
+
+
 def iter_options(select):
     """逐一取出選單裡的商品，回傳 (商品文字, 價格, 分組名稱)；沒有價格的跳過。"""
     for option in select.find_all("option"):

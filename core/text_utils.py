@@ -34,6 +34,15 @@ def short_name(name: str) -> str:
     return re.sub(r"\s+", " ", name).strip()
 
 
+def part_display_name(name: str) -> str:
+    """桌機零件名稱整理：拿掉「任搭價」「限搭機」這類前綴和「▼下殺到…」這類促銷尾巴，保留型號。"""
+    name = str(name)
+    name = re.sub(r"^\s*(任搭價|限搭機|\[[^\]]*\]|【[^】]*】)\s*", "", name)
+    name = re.split(r"▼|※", name)[0]
+    name = name.replace("｛", "").replace("｝", " ")
+    return re.sub(r"\s+", " ", name).strip(" ,")
+
+
 def weight_grams(name: str):
     """原價屋偶爾會在名稱寫重量，例如【極致輕999克】、極致輕990g，抓得到就回傳克數。"""
     m = re.search(r"(\d{3,4})\s*(?:克|g)(?![A-Za-z])", str(name))

@@ -20,37 +20,13 @@ from core.laptop.recommend import card_warnings, pick_budget_saver, pick_laptops
 from core.shop_links import COOLPC_URL, momo_url, search_keyword, shopee_url
 from core.text_utils import short_name
 from data import store
-from ui.helpers import init_state, page_header, qp_int, sync_url
+from ui.helpers import ensure_fresh_data, init_state, page_header, qp_int, show_data_source, sync_url
 
 
 @st.cache_data(ttl=600)
 def cached_laptops(data_version: float) -> pd.DataFrame:
     # data_version 是資料檔的修改時間：資料一更新，就會重新讀取，不會一直用舊的快取
-    return store.load_laptops()
-
-
-def refresh_data() -> None:
-    """資料太舊就自動更新；網址有 refresh=1 就強制更新一次（測試用）。"""
-    # 用 session_state 記住，避免同一個分頁重複觸發強制更新
-    force = st.query_params.get("refresh") == "1" and not st.session_state.get("forced_done")
-    if force or store.laptop_needs_refresh():
-        with st.spinner("📡 正在從原價屋抓今天的最新價格，大約 5～10 秒…"):
-            error = store.refresh_laptops(force=force)
-    else:
-        error = None
-
-    if force:
-        st.session_state["forced_done"] = True
-        if error:
-            st.error(f"強制更新失敗：{error}")
-        else:
-            st.success("強制更新成功，已抓到原價屋最新價格。")
-
-    if not store.laptop_data_exists():
-        st.error(f"還沒有筆電資料，自動抓取也失敗了。（原因：{error}）請稍後再重新整理一次。")
-        st.stop()
-
-    st.session_state["refresh_error"] = error
+    return store.LAPTOPS.load()
 
 
 def show_laptop_card(row, weight_idx) -> None:
@@ -133,15 +109,9 @@ def show_results(laptops_df, nb_budget, usage_idx, weight_idx, battery_idx, nois
 def render() -> None:
     page_header("目前模式：💻 筆記型電腦 (Laptop)")
 
-    refresh_data()
-    laptops_df = cached_laptops(store.laptop_data_version())
-    scraped_at = store.laptop_scraped_at()
-    updated_text = scraped_at.strftime("%Y/%m/%d %H:%M") if scraped_at else "不明"
-
-    st.caption(f"📡 價格來源：原價屋線上估價單，共 {len(laptops_df)} 台筆電，最後更新 {updated_text}")
-    refresh_error = st.session_state.get("refresh_error")
-    if refresh_error:
-        st.caption(f"⚠️ 今天自動更新價格失敗，目前顯示的是上次抓到的價格。（{refresh_error}）")
+    refresh_error = ensure_fresh_data(store.LAPTOPS, "筆電")
+    laptops_df = cached_laptops(store.LAPTOPS.version())
+    show_data_source(store.LAPTOPS, f"共 {len(laptops_df)} 台筆電", refresh_error)
 
     # 第一次打開（或重新整理）時，從網址讀回上次的選項
     init_state("nb_budget", qp_int("budget", LAPTOP_BUDGET_DEFAULT, LAPTOP_BUDGET_MIN, LAPTOP_BUDGET_MAX))
