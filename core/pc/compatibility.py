@@ -151,6 +151,9 @@ def check_build(build: dict):
         notes.append("主機板是入門款，搭配高階 CPU 時供電比較吃緊，長時間滿載效能可能打折。")
     if int(_num(ram["ram_sticks"], 1)) == 1:
         notes.append("記憶體只有一條，效能會比兩條一組（雙通道）差一些，之後可以再加一條同型號的。")
+    if int(_num(ram["ram_sticks"], 1)) >= 4 and int(_num(ram["ddr"])) == 5:
+        notes.append("記憶體插滿 4 條 DDR5 時，主機板通常會自動把速度降低一點（約 DDR5-4800～5600）才穩定，"
+                     "這是正常現象。第一次開機要等比較久（可能 1～3 分鐘黑畫面在測記憶體），不是壞掉。")
     if not _bool(mb["wifi"]):
         notes.append("主機板沒有 Wi-Fi，要接網路線；宿舍或房間沒有網路孔的話，要另外買無線網卡（約 $500 起）。")
     if gpu is None:

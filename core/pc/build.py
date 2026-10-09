@@ -75,6 +75,7 @@ CPU_CAP = {
     RES_UNKNOWN: {USAGE_3A: 1.4, USAGE_ESPORTS: 1.1},
 }
 
+FLAGSHIP_BUDGET = 300000   # 用好料又給到這麼多預算＝要頂規：記憶體、SSD 不設上限，能多大就多大
 GOOD_ENOUGH_RATIO = 0.97   # 能省則省：便宜的組合分數只要有最強的 97%，就選便宜的
 MIN_CORES = 6              # 4 核心的 CPU 太舊了，不推薦
 AM5_BONUS = 3              # AM5 之後還能直接換新 CPU，給一點加分
@@ -433,12 +434,20 @@ class _Builder:
 # ============================================================
 # 「用好料」：把剩下的錢拿去升級
 # ============================================================
+def _is_flagship(prefs) -> bool:
+    return prefs is not None and prefs.premium and prefs.budget >= FLAGSHIP_BUDGET
+
+
 def _quality(category, item, psu_needed=0, prefs=None):
-    """升級時比較「哪個比較好」。每一項都有上限，超過實際需要的規格不加分（不買用不到的東西）。"""
+    """升級時比較「哪個比較好」。每一項都有上限，超過實際需要的規格不加分（不買用不到的東西）。
+
+    頂規預算（_is_flagship）時，記憶體、SSD 容量不設上限。
+    """
     if item is None:
         return (0, 0, 0)
+    flagship = _is_flagship(prefs)
     if category == "ssd":
-        return (min(item["capacity_gb"], 4000), item["nand"] == "TLC", SSD_GEN_RANK.get(item["ssd_interface"], 0))
+        return (min(item["capacity_gb"], 8000 if flagship else 4000), item["nand"] == "TLC", SSD_GEN_RANK.get(item["ssd_interface"], 0))
     if category == "motherboard":
         # 小體積機殼就不追求大板；一般機殼優先 ATX（插槽多、散熱好）
         form = 0 if (prefs is not None and prefs.small) else FORM_RANK.get(item["form_factor"], 1)
@@ -447,6 +456,8 @@ def _quality(category, item, psu_needed=0, prefs=None):
         usages = _main_usages(prefs) if prefs is not None else ()
         heavy = any(u in (USAGE_DEV, USAGE_AI, USAGE_CREATOR) for u in usages)
         cap = (96 if prefs is not None and prefs.budget >= 150000 else 64) if heavy else 32
+        if flagship:
+            cap = 9999
         speed = item["ram_speed"] or 0
         return (min(item["ram_total_gb"], cap), min(speed, 6400), -(item["ram_cl"] or 99))
     if category == "psu":
@@ -466,6 +477,9 @@ def _upgrade(parts, chosen, prefs, budget_core):
         order = ["ssd", "ram", "motherboard", "psu", "cooler"]
     psu_needed = required_psu_w(chosen["cpu"], chosen["gpu"])
     upgraded = []
+    # 每一步最多花剩下預算的幾成；頂規預算時放寬，才買得起 256GB 這種很貴的記憶體
+    share = 0.75 if _is_flagship(prefs) else 0.4
+    max_sticks = 4 if _is_flagship(prefs) else 2
 
     for category in order:
         left = budget_core - sum(p["price"] for p in chosen.values() if p is not None)
@@ -475,9 +489,9 @@ def _upgrade(parts, chosen, prefs, budget_core):
         current_price = current["price"] if current is not None else 0
         current_q = _quality(category, current, psu_needed, prefs)
         pool = _part(parts, category)
-        pool = pool[pool["price"] <= current_price + left * 0.4]
+        pool = pool[pool["price"] <= current_price + left * share]
         if category == "ram":
-            pool = pool[(pool["ddr"] == chosen["ram"]["ddr"]) & (pool["ram_sticks"] == 2)]
+            pool = pool[(pool["ddr"] == chosen["ram"]["ddr"]) & pool["ram_sticks"].between(2, max_sticks)]
         if category == "motherboard":
             pool = pool[(pool["socket"] == chosen["cpu"]["socket"]) & (pool["ddr"] == chosen["ram"]["ddr"])]
             if prefs.need_wifi:
@@ -617,15 +631,26 @@ def _make_build(parts, prefs, min_cores):
         "total": total,
         "problems": problems,
         "notes": notes,
-        "tips": _tips(all_parts, prefs, total, strongest_total + extras_cost, upgraded),
+        "tips": _tips(all_parts, prefs, total, strongest_total + extras_cost, upgraded, _strongest_gpu_chip(parts)),
         "upgraded": upgraded,
         "psu_needed_w": required_psu_w(chosen["cpu"], chosen["gpu"]),
     }
 
 
-def _tips(chosen, prefs, total, strongest_total, upgraded):
+def _strongest_gpu_chip(parts) -> str:
+    gpus = _part(parts, "gpu").dropna(subset=["gpu_score"])
+    if gpus.empty:
+        return ""
+    return str(gpus.sort_values("gpu_score").iloc[-1]["gpu_chip"])
+
+
+def _tips(chosen, prefs, total, strongest_total, upgraded, strongest_chip=""):
     """給使用者看的白話說明：為什麼這樣配。"""
     tips = []
+    gpu_now = chosen["gpu"]
+    if gpu_now is not None and strongest_chip and gpu_now["gpu_chip"] == strongest_chip and "5090" not in strongest_chip:
+        tips.append(f"原價屋今天沒有單賣 RTX 5090 顯示卡（只有品牌主機、電競筆電裡有），能單買到最強的是 {strongest_chip}，"
+                    "所以幫你配這張。等原價屋上架 5090，網站每天自動更新價格，就會自動配進去。")
     usages = _main_usages(prefs)
     cpu, gpu = chosen["cpu"], chosen["gpu"]
     gaming = any(u in GAME_USAGES for u in usages)
@@ -651,7 +676,7 @@ def _tips(chosen, prefs, total, strongest_total, upgraded):
             tips.append(f"文書用途這樣就很夠用了，剩下的 ${left:,} 可以留著買螢幕、鍵盤滑鼠。")
         elif prefs.budget - strongest_total >= 3000 and prefs.premium:
             tips.append(f"已經是原價屋目前買得到的頂規組合，預算還剩 ${left:,}。"
-                        "（目前原價屋沒有更強的顯示卡現貨；想再花，可以回第 2 步挑更高級的機殼，或在菜單按「換一個」升級散熱器。）")
+                        "想再花，可以回第 2 步挑更高級的機殼，或在菜單按「換一個」升級散熱器、記憶體。")
         elif prefs.budget - strongest_total >= 3000:
             tips.append(f"已經是原價屋目前買得到、搭配起來最強的組合，預算還剩 ${left:,}。想把主機板、電源、SSD 也換好一點，可以在進階選項選「用好料」。")
         else:

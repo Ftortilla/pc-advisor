@@ -212,6 +212,10 @@ def parse_ram(text: str, group: str):
     m = re.search(r"(\d+)\s*GB?\s*\(\s*(?:雙通道?)?\s*(\d+)\s*GB?\s*[\*xX×]\s*(\d)", text)
     if m:
         total, sticks = int(m.group(1)), int(m.group(3))
+    elif re.search(r"\d+\s*G[B]?\s*[\*xX×]\s*\d", text):
+        # 例：256GB("雙通"四根64G*4)：容量取第一個數字，條數取「64G*4」的 4
+        total = first_number(r"(\d+)\s*GB?", text.replace("DDR", ""), int)
+        sticks = first_number(r"\d+\s*G[B]?\s*[\*xX×]\s*(\d)", text, int)
     else:
         total = first_number(r"(\d+)\s*GB?\b", text.replace("DDR", ""), int)
         sticks = 2 if "雙通" in group else 1

@@ -42,7 +42,7 @@ USAGE_MIN_GPU = [0, 0, 3, 4, 6]
 # 桌機問卷選項（順序很重要：core/pc/build.py 用「第幾個」來判斷，改文字可以，別調換順序）
 # ============================================================
 PC_BUDGET_MIN = 15000
-PC_BUDGET_MAX = 200000
+PC_BUDGET_MAX = 500000   # 頂規：RTX 5090（有貨時）+ 256GB 記憶體大約要 40 萬以上
 PC_BUDGET_DEFAULT = 40000
 
 # 用途可以複選（順序跟 core/pc/build.py 的 USAGE_xxx 一樣）
